@@ -344,6 +344,9 @@ pub enum SourceUnitPart {
     /// An enum definition.
     EnumDefinition(Box<EnumDefinition>),
 
+    /// An offchain struct definition
+    OffchainStructDefinition(Box<OffchainStructDefinition>),
+
     /// A struct definition.
     StructDefinition(Box<StructDefinition>),
 
@@ -483,6 +486,12 @@ pub enum Type {
 #[derive(Debug, PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "pt-serde", derive(Serialize, Deserialize))]
 pub enum StorageLocation {
+    /// `offchain`
+    OffchainRead(Loc, String),
+
+    /// `offchain`
+    OffchainWrite(Loc),
+
     /// `memory`
     Memory(Loc),
 
@@ -527,10 +536,29 @@ pub struct StructDefinition {
     pub fields: Vec<VariableDeclaration>,
 }
 
+/// An offchain struct definition.
+///
+/// `struct <name> { <fields>;* }`
+#[derive(Debug, PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "pt-serde", derive(Serialize, Deserialize))]
+pub struct OffchainStructDefinition {
+    /// The code location.
+    pub loc: Loc,
+    /// The identifier.
+    ///
+    /// This field is `None` only if an error occurred during parsing.
+    pub name: Option<Identifier>,
+    /// The list of fields.
+    pub fields: Vec<VariableDeclaration>,
+}
+
 /// A contract part.
 #[derive(Debug, PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "pt-serde", derive(Serialize, Deserialize))]
 pub enum ContractPart {
+    /// An offchain struct definition
+    OffchainStructDefinition(Box<OffchainStructDefinition>),
+
     /// A struct definition.
     StructDefinition(Box<StructDefinition>),
 

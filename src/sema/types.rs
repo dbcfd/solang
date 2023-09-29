@@ -10,6 +10,7 @@ use super::{
     diagnostics::Diagnostics,
     ContractDefinition, SOLANA_SPARSE_ARRAY_SIZE,
 };
+use crate::sema::ast::OffchainStructDecl;
 use crate::sema::namespace::ResolveTypeContext;
 use crate::Target;
 use base58::{FromBase58, FromBase58Error};
@@ -31,6 +32,7 @@ type Graph = petgraph::Graph<(), usize, Directed, usize>;
 
 /// List the types which should be resolved later
 pub struct ResolveFields<'a> {
+    offchain_structs: Vec<ResolveOffchainStructFields<'a>>,
     structs: Vec<ResolveStructFields<'a>>,
     events: Vec<ResolveEventFields<'a>>,
     errors: Vec<ResolveErrorFields<'a>>,
@@ -46,6 +48,13 @@ struct ResolveErrorFields<'a> {
     error_no: usize,
     pt: &'a pt::ErrorDefinition,
     comments: Vec<DocComment>,
+}
+
+struct ResolveOffchainStructFields<'a> {
+    struct_no: usize,
+    pt: &'a pt::OffchainStructDefinition,
+    comments: Vec<DocComment>,
+    contract: Option<usize>,
 }
 
 struct ResolveStructFields<'a> {
@@ -74,6 +83,38 @@ pub fn resolve_typenames<'a>(
                 annotions_not_allowed(&item.annotations, "enum", ns);
 
                 let _ = enum_decl(def, file_no, &item.doccomments, None, ns);
+            }
+            pt::SourceUnitPart::OffchainStructDefinition(def) => {
+                annotions_not_allowed(&item.annotations, "offchainStruct", ns);
+                annotions_not_allowed(&item.annotations, "struct", ns);
+
+                let struct_no = ns.structs.len();
+
+                if ns.add_symbol(
+                    file_no,
+                    None,
+                    def.name.as_ref().unwrap(),
+                    Symbol::OffchainStruct(
+                        def.name.as_ref().unwrap().loc,
+                        StructType::UserDefined(struct_no),
+                    ),
+                ) {
+                    ns.offchain_structs.push(OffchainStructDecl {
+                        tags: Vec::new(),
+                        name: def.name.as_ref().unwrap().name.to_owned(),
+                        loc: def.name.as_ref().unwrap().loc,
+                        contract: None,
+                        fields: Vec::new(),
+                        offsets: Vec::new(),
+                    });
+
+                    delay.offchain_structs.push(ResolveOffchainStructFields {
+                        struct_no,
+                        pt: def,
+                        comments: item.doccomments.clone(),
+                        contract: None,
+                    });
+                }
             }
             pt::SourceUnitPart::StructDefinition(def) => {
                 annotions_not_allowed(&item.annotations, "struct", ns);
@@ -479,6 +520,40 @@ fn resolve_contract<'a>(
                     broken = true;
                 }
             }
+            pt::ContractPart::OffchainStructDefinition(ref pt) => {
+                annotions_not_allowed(&parts.annotations, "offchainStruct", ns);
+                annotions_not_allowed(&parts.annotations, "struct", ns);
+
+                let struct_no = ns.structs.len();
+
+                if ns.add_symbol(
+                    file_no,
+                    Some(contract_no),
+                    pt.name.as_ref().unwrap(),
+                    Symbol::OffchainStruct(
+                        pt.name.as_ref().unwrap().loc,
+                        StructType::UserDefined(struct_no),
+                    ),
+                ) {
+                    ns.offchain_structs.push(OffchainStructDecl {
+                        tags: Vec::new(),
+                        name: pt.name.as_ref().unwrap().name.to_owned(),
+                        loc: pt.name.as_ref().unwrap().loc,
+                        contract: Some(def.name.as_ref().unwrap().name.to_owned()),
+                        fields: Vec::new(),
+                        offsets: Vec::new(),
+                    });
+
+                    delay.offchain_structs.push(ResolveOffchainStructFields {
+                        struct_no,
+                        pt,
+                        comments: parts.doccomments.clone(),
+                        contract: Some(contract_no),
+                    });
+                } else {
+                    broken = true;
+                }
+            }
             pt::ContractPart::StructDefinition(ref pt) => {
                 annotions_not_allowed(&parts.annotations, "struct", ns);
 
@@ -693,6 +768,106 @@ fn contract_annotations(
             }
         }
     }
+}
+
+/// Resolve a parsed offchain struct definition. The return value will be true if the entire
+/// definition is valid; however, whatever could be parsed will be added to the resolved
+/// contract, so that we can continue producing compiler messages for the remainder
+/// of the contract, even if the struct contains an invalid definition.
+pub fn offchain_struct_decl(
+    def: &pt::OffchainStructDefinition,
+    file_no: usize,
+    tags: &[DocComment],
+    contract_no: Option<usize>,
+    ns: &mut Namespace,
+) -> (Vec<Tag>, Vec<Parameter>) {
+    let mut fields: Vec<Parameter> = Vec::new();
+
+    for field in &def.fields {
+        let mut diagnostics = Diagnostics::default();
+
+        let ty = match ns.resolve_type(
+            file_no,
+            contract_no,
+            ResolveTypeContext::None,
+            &field.ty,
+            &mut diagnostics,
+        ) {
+            Ok(s) => s,
+            Err(()) => {
+                ns.diagnostics.extend(diagnostics);
+                Type::Unresolved
+            }
+        };
+
+        if let Some(other) = fields.iter().find(|f| {
+            f.id.as_ref().map(|id| id.name.as_str())
+                == Some(field.name.as_ref().unwrap().name.as_str())
+        }) {
+            ns.diagnostics.push(Diagnostic::error_with_note(
+                field.name.as_ref().unwrap().loc,
+                format!(
+                    "offchainStruct '{}' has duplicate struct field '{}'",
+                    def.name.as_ref().unwrap().name,
+                    field.name.as_ref().unwrap().name
+                ),
+                other.loc,
+                format!(
+                    "location of previous declaration of '{}'",
+                    other.name_as_str()
+                ),
+            ));
+            continue;
+        }
+
+        // memory/calldata make no sense for struct fields.
+        // TODO: ethereum foundation solidity does not allow storage fields
+        // in structs, but this is perfectly possible. The struct would not be
+        // allowed as parameter/return types of public functions though.
+        if let Some(storage) = &field.storage {
+            ns.diagnostics.push(Diagnostic::error(
+                storage.loc(),
+                format!("storage location '{storage}' not allowed for struct field"),
+            ));
+        }
+
+        fields.push(Parameter {
+            loc: field.loc,
+            id: Some(pt::Identifier {
+                name: field.name.as_ref().unwrap().name.to_string(),
+                loc: field.name.as_ref().unwrap().loc,
+            }),
+            ty,
+            ty_loc: Some(field.ty.loc()),
+            indexed: false,
+            readonly: false,
+            infinite_size: false,
+            recursive: false,
+            annotation: None,
+        });
+    }
+
+    if fields.is_empty() {
+        ns.diagnostics.push(Diagnostic::error(
+            def.name.as_ref().unwrap().loc,
+            format!(
+                "struct definition for '{}' has no fields",
+                def.name.as_ref().unwrap().name
+            ),
+        ));
+    }
+
+    let doc = resolve_tags(
+        def.name.as_ref().unwrap().loc.file_no(),
+        "offchainStruct",
+        tags,
+        Some(&fields),
+        None,
+        None,
+        ns,
+    );
+
+    (doc, fields)
 }
 
 /// Resolve a parsed struct definition. The return value will be true if the entire

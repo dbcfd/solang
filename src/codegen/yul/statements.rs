@@ -228,6 +228,44 @@ fn cfg_single_assigment(
 
         ast::YulExpression::SolidityLocalVariable(
             _,
+            ty @ Type::OffchainStruct(..),
+            Some(StorageLocation::OffchainRead(_)),
+            var_no,
+        ) => {
+            let (member_no, casted_expr, member_ty) = match suffix {
+                YulSuffix::Selector => (
+                    0,
+                    rhs.cast(&Type::Bytes(ns.target.selector_length()), ns),
+                    Type::Bytes(ns.target.selector_length()),
+                ),
+                YulSuffix::Address => {
+                    (1, rhs.cast(&Type::Address(false), ns), Type::Address(false))
+                }
+                _ => unreachable!(),
+            };
+
+            let ptr = Expression::StructMember {
+                loc: *loc,
+                ty: Type::Ref(Box::new(member_ty)),
+                expr: Box::new(Expression::Variable {
+                    loc: *loc,
+                    ty: ty.clone(),
+                    var_no: *var_no,
+                }),
+                member: member_no,
+            };
+
+            cfg.add(
+                vartab,
+                Instr::Store {
+                    dest: ptr,
+                    data: casted_expr,
+                },
+            );
+        }
+
+        ast::YulExpression::SolidityLocalVariable(
+            _,
             ty,
             Some(StorageLocation::Memory(_)),
             var_no,

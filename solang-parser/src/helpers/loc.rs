@@ -116,6 +116,7 @@ impl_optional_for_pt!(
     pt::NamedArgument,
     pt::Parameter,
     pt::StringLiteral,
+    pt::OffchainStructDefinition,
     pt::StructDefinition,
     pt::TypeDefinition,
     pt::Using,
@@ -229,6 +230,7 @@ impl_for_structs!(
     pt::NamedArgument,
     pt::Parameter,
     pt::StringLiteral,
+    pt::OffchainStructDefinition,
     pt::StructDefinition,
     pt::TypeDefinition,
     pt::Using,
@@ -276,6 +278,7 @@ impl_for_enums! {
     }
 
     pt::ContractPart: match self {
+        Self::OffchainStructDefinition(ref l, ..) => l.loc(),
         Self::StructDefinition(ref l, ..) => l.loc(),
         Self::EventDefinition(ref l, ..) => l.loc(),
         Self::EnumDefinition(ref l, ..) => l.loc(),
@@ -385,6 +388,7 @@ impl_for_enums! {
         Self::ImportDirective(ref l, ..) => l.loc(),
         Self::ContractDefinition(ref l, ..) => l.loc(),
         Self::EnumDefinition(ref l, ..) => l.loc(),
+        Self::OffchainStructDefinition(ref l, ..) => l.loc(),
         Self::StructDefinition(ref l, ..) => l.loc(),
         Self::EventDefinition(ref l, ..) => l.loc(),
         Self::ErrorDefinition(ref l, ..) => l.loc(),
@@ -418,7 +422,9 @@ impl_for_enums! {
     }
 
     pt::StorageLocation: match self {
-        Self::Calldata(l, ..)
+        Self::OffchainRead(l, ..)
+        | Self::OffchainWrite(l, ..)
+        | Self::Calldata(l, ..)
         | Self::Memory(l, ..)
         | Self::Storage(l, ..) => l,
     }

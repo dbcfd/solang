@@ -64,6 +64,21 @@ pub enum Instr {
     AssertFailure { encoded_args: Option<Expression> },
     /// Print to log message
     Print { expr: Expression },
+    /// OffchainRead - For a given storage, retrieve types based on value
+    OffchainRead {
+        loc: Loc,
+        ty: Type,
+        value: Expression,
+        res: usize,
+    },
+    /// OffchainWrite - For a given storage, write value of type
+    OffchainWrite {
+        loc: pt::Loc,
+        key: String,
+        ty: Type,
+        value: Expression,
+        res: usize,
+    },
     /// Load storage (this is an instruction rather than an expression
     /// so that it can be moved around by the dead storage pass
     LoadStorage {

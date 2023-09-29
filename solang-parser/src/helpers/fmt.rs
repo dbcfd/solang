@@ -228,6 +228,20 @@ impl Display for pt::StringLiteral {
     }
 }
 
+impl Display for pt::OffchainStructDefinition {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        f.write_str("offchainStruct ")?;
+        write_opt!(f, &self.name, ' ');
+
+        f.write_char('{')?;
+        write_separated(&self.fields, f, "; ")?;
+        if !self.fields.is_empty() {
+            f.write_char(';')?;
+        }
+        f.write_char('}')
+    }
+}
+
 impl Display for pt::StructDefinition {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         f.write_str("struct ")?;
@@ -399,6 +413,7 @@ impl Display for pt::Comment {
 impl Display for pt::ContractPart {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
+            Self::OffchainStructDefinition(inner) => inner.fmt(f),
             Self::StructDefinition(inner) => inner.fmt(f),
             Self::EventDefinition(inner) => inner.fmt(f),
             Self::EnumDefinition(inner) => inner.fmt(f),
@@ -795,6 +810,7 @@ impl Display for pt::SourceUnitPart {
             Self::ImportDirective(inner) => inner.fmt(f),
             Self::ContractDefinition(inner) => inner.fmt(f),
             Self::EnumDefinition(inner) => inner.fmt(f),
+            Self::OffchainStructDefinition(inner) => inner.fmt(f),
             Self::StructDefinition(inner) => inner.fmt(f),
             Self::EventDefinition(inner) => inner.fmt(f),
             Self::ErrorDefinition(inner) => inner.fmt(f),
@@ -962,6 +978,8 @@ impl pt::StorageLocation {
     /// Returns the string representation of this type.
     pub const fn as_str(&self) -> &'static str {
         match self {
+            Self::OffchainRead(..) => "offchainRead",
+            Self::OffchainWrite(_) => "offchainWrite",
             Self::Memory(_) => "memory",
             Self::Storage(_) => "storage",
             Self::Calldata(_) => "calldata",
@@ -1865,6 +1883,10 @@ mod tests {
                 body: Some(stmt!({})),
             } => "function name() virtual returns (uint256) {}",
 
+            pt::OffchainStructDefinition {
+                name: Some(id("name")),
+                fields: vec![],
+            } => "offchainStruct name {}",
             pt::StructDefinition {
                 name: Some(id("name")),
                 fields: vec![],
@@ -2375,6 +2397,8 @@ mod tests {
             }
 
             pt::StorageLocation: {
+                pt::StorageLocation::OffchainRead(loc!(), "".to_string()) => "offchainRead",
+                pt::StorageLocation::OffchainWrite(loc!()) => "offchainWrite",
                 pt::StorageLocation::Memory(loc!()) => "memory",
                 pt::StorageLocation::Storage(loc!()) => "storage",
                 pt::StorageLocation::Calldata(loc!()) => "calldata",

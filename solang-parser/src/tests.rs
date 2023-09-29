@@ -12,6 +12,188 @@ use std::{fs, path::Path, thread};
 use walkdir::WalkDir;
 
 #[test]
+fn offchain_storage() {
+    let src = r#"
+contract OffchainContract {
+    struct MyModel {
+      string user;
+    }
+
+    function createInstance(MyModel offchainWrite model) public returns (string) {
+        return model.id;
+    }
+
+    function query(string offchainRead(MyModel) query) public returns (MyModel[] memory) {
+        return query.result;
+    }
+}
+"#;
+
+    let mut comments = Vec::new();
+    let mut errors = Vec::new();
+    let lex = Lexer::new(src, 0, &mut comments, &mut errors);
+
+    let my_errs = &mut Vec::new();
+    let actual_parse_tree = solidity::SourceUnitParser::new()
+        .parse(src, 0, my_errs, lex)
+        .unwrap();
+
+    let expected_parse_tree = SourceUnit(vec![SourceUnitPart::ContractDefinition(Box::new(
+        ContractDefinition {
+            loc: File(0, 1, 318),
+            ty: ContractTy::Contract(File(0, 1, 9)),
+            name: Some(Identifier {
+                loc: File(0, 10, 26),
+                name: "OffchainContract".to_string(),
+            }),
+            base: Vec::new(),
+            parts: vec![
+                ContractPart::StructDefinition(Box::new(StructDefinition {
+                    loc: File(0, 33, 74),
+                    name: Some(Identifier {
+                        loc: File(0, 40, 47),
+                        name: "MyModel".to_string(),
+                    }),
+                    fields: vec![VariableDeclaration {
+                        loc: File(0, 56, 67),
+                        ty: Expression::Type(File(0, 56, 62), Type::String),
+                        storage: None,
+                        name: Some(Identifier {
+                            loc: File(0, 63, 67),
+                            name: "user".to_string(),
+                        }),
+                    }],
+                })),
+                ContractPart::FunctionDefinition(Box::new(FunctionDefinition {
+                    loc: File(0, 80, 156),
+                    ty: FunctionTy::Function,
+                    name: Some(Identifier {
+                        loc: File(0, 89, 103),
+                        name: "createInstance".to_string(),
+                    }),
+                    name_loc: File(0, 89, 103),
+                    params: vec![(
+                        File(0, 104, 131),
+                        Some(Parameter {
+                            loc: File(0, 104, 131),
+                            annotation: None,
+                            ty: Expression::Variable(Identifier {
+                                loc: File(0, 104, 111),
+                                name: "MyModel".to_string(),
+                            }),
+                            storage: Some(StorageLocation::OffchainWrite(File(0, 112, 125))),
+                            name: Some(Identifier {
+                                loc: File(0, 126, 131),
+                                name: "model".to_string(),
+                            }),
+                        }),
+                    )],
+                    attributes: vec![FunctionAttribute::Visibility(Visibility::Public(Some(
+                        File(0, 133, 139),
+                    )))],
+                    return_not_returns: None,
+                    returns: vec![(
+                        File(0, 149, 155),
+                        Some(Parameter {
+                            loc: File(0, 149, 155),
+                            annotation: None,
+                            ty: Expression::Type(File(0, 149, 155), Type::String),
+                            storage: None,
+                            name: None,
+                        }),
+                    )],
+                    body: Some(Statement::Block {
+                        loc: File(0, 157, 189),
+                        unchecked: false,
+                        statements: vec![Statement::Return(
+                            File(0, 167, 182),
+                            Some(Expression::MemberAccess(
+                                File(0, 174, 182),
+                                Box::new(Expression::Variable(Identifier {
+                                    loc: File(0, 174, 179),
+                                    name: "model".to_string(),
+                                })),
+                                Identifier {
+                                    loc: File(0, 180, 182),
+                                    name: "id".to_string(),
+                                },
+                            )),
+                        )],
+                    }),
+                })),
+                ContractPart::FunctionDefinition(Box::new(FunctionDefinition {
+                    loc: File(0, 195, 279),
+                    ty: FunctionTy::Function,
+                    name: Some(Identifier {
+                        loc: File(0, 204, 209),
+                        name: "query".to_string(),
+                    }),
+                    name_loc: File(0, 204, 209),
+                    params: vec![(
+                        File(0, 210, 244),
+                        Some(Parameter {
+                            loc: File(0, 210, 244),
+                            annotation: None,
+                            ty: Expression::Type(File(0, 210, 216), Type::String),
+                            storage: Some(StorageLocation::OffchainRead(
+                                File(0, 217, 238),
+                                "MyModel".to_string(),
+                            )),
+                            name: Some(Identifier {
+                                loc: File(0, 239, 244),
+                                name: "query".to_string(),
+                            }),
+                        }),
+                    )],
+                    attributes: vec![FunctionAttribute::Visibility(Visibility::Public(Some(
+                        File(0, 246, 252),
+                    )))],
+                    return_not_returns: None,
+                    returns: vec![(
+                        File(0, 262, 278),
+                        Some(Parameter {
+                            loc: File(0, 262, 278),
+                            annotation: None,
+                            ty: Expression::ArraySubscript(
+                                File(0, 262, 271),
+                                Box::new(Expression::Variable(Identifier {
+                                    loc: File(0, 262, 269),
+                                    name: "MyModel".to_string(),
+                                })),
+                                None,
+                            ),
+                            storage: Some(StorageLocation::Memory(File(0, 272, 278))),
+                            name: None,
+                        }),
+                    )],
+                    body: Some(Statement::Block {
+                        loc: File(0, 280, 316),
+                        unchecked: false,
+                        statements: vec![Statement::Return(
+                            File(0, 290, 309),
+                            Some(Expression::MemberAccess(
+                                File(0, 297, 309),
+                                Box::new(Expression::Variable(Identifier {
+                                    loc: File(0, 297, 302),
+                                    name: "query".to_string(),
+                                })),
+                                Identifier {
+                                    loc: File(0, 303, 309),
+                                    name: "result".to_string(),
+                                },
+                            )),
+                        )],
+                    }),
+                })),
+            ],
+        },
+    ))]);
+
+    println!("{}", actual_parse_tree);
+    assert_eq!(actual_parse_tree, expected_parse_tree);
+}
+
+#[test]
 fn parser_error_recovery() {
     let src = r#"import * as sesa frum "sesa";
 pragma sesa_pragma;

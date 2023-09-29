@@ -4,6 +4,7 @@ use super::symtable::Symtable;
 use crate::abi::anchor::discriminator;
 use crate::codegen::cfg::{ControlFlowGraph, Instr};
 use crate::diagnostics::Diagnostics;
+use crate::sema::ast::StructType::UserDefined;
 use crate::sema::yul::ast::{InlineAssembly, YulFunction};
 use crate::sema::Recurse;
 use crate::{codegen, Target};
@@ -38,6 +39,7 @@ pub enum Type {
     /// The usize is an index into enums in the namespace
     Enum(usize),
     /// The usize is an index into contracts in the namespace
+    OffchainStruct(UserDefined(usize)),
     Struct(StructType),
     Mapping(Mapping),
     /// The usize is an index into contracts in the namespace
@@ -150,6 +152,17 @@ pub enum StructType {
     AccountMeta,
     ExternalFunction,
     SolParameters,
+}
+
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct OffchainStructDecl {
+    pub tags: Vec<Tag>,
+    pub name: String,
+    pub loc: pt::Loc,
+    pub contract: Option<String>,
+    pub fields: Vec<Parameter>,
+    // List of offsets of the fields, last entry is the offset for the struct overall size
+    pub offsets: Vec<BigInt>,
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -601,6 +614,7 @@ pub enum Symbol {
     Enum(pt::Loc, usize),
     Function(Vec<(pt::Loc, usize)>),
     Variable(pt::Loc, Option<usize>, usize),
+    OffchainStruct(pt::Loc, OffchainStrucType),
     Struct(pt::Loc, StructType),
     Event(Vec<(pt::Loc, usize)>),
     Error(pt::Loc, usize),
@@ -675,6 +689,7 @@ pub struct Namespace {
     pub target: Target,
     pub files: Vec<File>,
     pub enums: Vec<EnumDecl>,
+    pub offchain_structs: Vec<OffchainStructDecl>,
     pub structs: Vec<StructDecl>,
     pub events: Vec<EventDecl>,
     pub errors: Vec<ErrorDecl>,

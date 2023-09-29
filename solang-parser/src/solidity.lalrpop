@@ -13,6 +13,7 @@ SourceUnitPart: SourceUnitPart = {
     PragmaDirective => <>,
     ImportDirective => <>,
     EnumDefinition => SourceUnitPart::EnumDefinition(<>),
+    OffchainStructDefinition => SourceUnitPart::OffchainStructDefinition(<>),
     StructDefinition => SourceUnitPart::StructDefinition(<>),
     EventDefinition => SourceUnitPart::EventDefinition(<>),
     ErrorDefinition => SourceUnitPart::ErrorDefinition(<>),
@@ -124,6 +125,8 @@ ArrayDimension: Option<Expression> = {
 }
 
 StorageLocation: StorageLocation = {
+    <l:@L> "offchainRead" "(" <n:identifier> ")" <r:@R> => StorageLocation::OffchainRead(Loc::File(file_no, l, r), n.to_string()),
+    <l:@L> "offchainWrite" <r:@R> => StorageLocation::OffchainWrite(Loc::File(file_no, l, r)),
     <l:@L> "memory" <r:@R> => StorageLocation::Memory(Loc::File(file_no, l, r)),
     <l:@L> "storage" <r:@R> => StorageLocation::Storage(Loc::File(file_no, l, r)),
     <l:@L> "calldata" <r:@R> => StorageLocation::Calldata(Loc::File(file_no, l, r)),
@@ -176,6 +179,12 @@ VariableDeclaration: VariableDeclaration = {
     },
 }
 
+OffchainStructDefinition: Box<OffchainStructDefinition> = {
+    <l:@L> "offchainStruct" <name:SolIdentifierOrError> "{" <fields:(<VariableDeclaration> ";")*> "}" <r:@R> => {
+        Box::new(OffchainStructDefinition{loc: Loc::File(file_no, l, r), name, fields})
+    }
+}
+
 StructDefinition: Box<StructDefinition> = {
     <l:@L> "struct" <name:SolIdentifierOrError> "{" <fields:(<VariableDeclaration> ";")*> "}" <r:@R> => {
         Box::new(StructDefinition{loc: Loc::File(file_no, l, r), name, fields})
@@ -190,6 +199,7 @@ ContractTy: ContractTy = {
 }
 
 ContractPart: ContractPart = {
+    OffchainStructDefinition => ContractPart::OffchainStructDefinition(<>),
     StructDefinition => ContractPart::StructDefinition(<>),
     EventDefinition => ContractPart::EventDefinition(<>),
     ErrorDefinition => ContractPart::ErrorDefinition(<>),
@@ -926,6 +936,9 @@ YulIdentifier: Identifier = {
     <l:@L> "memory" <r:@L> => Identifier{loc: Loc::File(file_no, l, r), name: "memory".to_string()},
     <l:@L> "modifier" <r:@L> => Identifier{loc: Loc::File(file_no, l, r), name: "modifier".to_string()},
     <l:@L> "new" <r:@L> => Identifier{loc: Loc::File(file_no, l, r), name: "new".to_string()},
+    <l:@L> "offchainRead" <r:@L> => Identifier{loc: Loc::File(file_no, l, r), name: "offchainRead".to_string()},
+    <l:@L> "offchainWrite" <r:@L> => Identifier{loc: Loc::File(file_no, l, r), name: "offchainWrite".to_string()},
+    <l:@L> "offchainStruct" <r:@L> => Identifier{loc: Loc::File(file_no, l, r), name: "offchainStruct".to_string()},
     <l:@L> "override" <r:@L> => Identifier{loc: Loc::File(file_no, l, r), name: "override".to_string()},
     <l:@L> "payable" <r:@L> => Identifier{loc: Loc::File(file_no, l, r), name: "payable".to_string()},
     <l:@L> "public" <r:@L> => Identifier{loc: Loc::File(file_no, l, r), name: "public".to_string()},
@@ -1196,6 +1209,9 @@ extern {
         "struct" => Token::Struct,
         "memory" => Token::Memory,
         "calldata" => Token::Calldata,
+        "offchainRead" => Token::OffchainRead,
+        "offchainWrite" => Token::OffchainWrite,
+        "offchainStruct" => Token::OffchainStruct,
         "storage" => Token::Storage,
         "import" => Token::Import,
         "contract" => Token::Contract,
